@@ -7,7 +7,7 @@
     "deploy/profiles/*"
   ],
   "scripts": {
-    "build": "node scripts/patch-frontend-edgeone.mjs",
+    "build": "node scripts/build-function.mjs && node scripts/patch-frontend-edgeone.mjs",
     "ci-test": "concurrently --kill-others \"npm start\" \"wait-on http://localhost:8080 && mocha\"",
     "ci-test:docker": "concurrently --kill-others \"npm run start:docker\" \"wait-on http://localhost:8080 && mocha\"",
     "test": "mocha",
@@ -28,3 +28,4 @@
     "wrangler": "^4.24.0"
   }
 }
+
