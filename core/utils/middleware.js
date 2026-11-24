@@ -1,5 +1,4 @@
-import sentryPlugin from "@cloudflare/pages-plugin-sentry";
-import '@sentry/tracing';
+// EdgeOne 版：移除 Sentry 插件（体积 25MB+，会超出 Edge Functions 5MB 代码包限制）
 import { fetchOthersConfig } from "./sysConfig";
 import { checkDatabaseConfig as checkDbConfig } from './databaseAdapter.js';
 
@@ -10,21 +9,7 @@ export async function errorHandling(context) {
   const othersConfig = await fetchOthersConfig(context.env);
   disableTelemetry = !othersConfig.telemetry.enabled;
 
-  const env = context.env;
-  if (!disableTelemetry) {
-    context.data.telemetry = true;
-    // 直接使用本地配置，默认采样率为 100%，无需请求远程配置。
-    const configuredSampleRate = Number(env.sampleRate ?? 1);
-    const sampleRate = Number.isFinite(configuredSampleRate)
-      && configuredSampleRate >= 0 && configuredSampleRate <= 1
-      ? configuredSampleRate
-      : 1;
-    return sentryPlugin({
-      dsn: "https://44b7b443108ec6d298044b125ff89d28@o4507644548022272.ingest.us.sentry.io/4507644555100160",
-      tracesSampleRate: sampleRate,
-    })(context);;
-  }
-
+  // EdgeOne 版不上报 Sentry，直接放行
   return context.next();
 }
 
@@ -33,7 +18,7 @@ export async function telemetryData(context) {
   const othersConfig = await fetchOthersConfig(context.env);
   disableTelemetry = !othersConfig.telemetry.enabled;
   
-  if (!disableTelemetry) {
+  if (!disableTelemetry && context.data && context.data.sentry) {
     try {
       const parsedHeaders = {};
       context.request.headers.forEach((value, key) => {

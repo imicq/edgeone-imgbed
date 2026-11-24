@@ -13,3 +13,9 @@ node_modules
 .vscode/
 .claude/
 .agents/
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
+  

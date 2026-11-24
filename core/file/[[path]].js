@@ -1,5 +1,5 @@
 import { createS3Client } from '../utils/storage/s3Client.js';
-import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from '../../deploy/edgeone/s3.js';
 import { fetchSecurityConfig } from "../utils/sysConfig";
 import { TelegramAPI } from "../utils/storage/telegramAPI";
 import { DiscordAPI } from "../utils/storage/discordAPI";

@@ -19,9 +19,7 @@
   "overrides": {
     "fast-xml-parser": "^5.3.6"
   },
-  "dependencies": {
-    "@aws-sdk/client-s3": "3.726.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "concurrently": "^8.2.2",
     "miniflare": "^4.20260708.1",

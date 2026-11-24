@@ -13,7 +13,7 @@ import { TelegramAPI } from "../utils/storage/telegramAPI";
 import { DiscordAPI } from "../utils/storage/discordAPI";
 import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
 import { WebDAVAPI } from "../utils/storage/webdavAPI";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from '../../deploy/edgeone/s3.js';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { resolveUploadExpiry } from '../utils/fileExpiryService.js';
 

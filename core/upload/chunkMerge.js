@@ -2,7 +2,7 @@ import { createS3Client } from '../utils/storage/s3Client.js';
 /* ========== 分块合并处理 ========== */
 import { createResponse, createUploadResponse, checkUploadFormat, getUploadIp, getIPAddress, selectConsistentChannel, buildUniqueFileId, endUpload, sanitizeUploadFolder } from './uploadTools';
 import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatuses, cleanupChunkData, cleanupUploadSession, isStagedS3Upload } from './chunkUpload';
-import { CompleteMultipartUploadCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { CompleteMultipartUploadCommand, PutObjectCommand } from '../../deploy/edgeone/s3.js';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { fetchPageConfig } from '../utils/sysConfig.js';
 import { resolveFileType } from '../utils/mimeTypes.js';
