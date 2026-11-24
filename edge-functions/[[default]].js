@@ -3,5 +3,14 @@
 import { handleRequest } from '../deploy/edgeone/index.js';
 
 export default async function onRequest(context) {
+    const dbgUrl = new URL(context.request.url);
+    if (dbgUrl.searchParams.get('dbg') === '1') {
+        return new Response(JSON.stringify({
+            url: context.request.url,
+            pathname: dbgUrl.pathname,
+            params: context.params || null,
+            keys: Object.keys(context),
+        }), { headers: { 'content-type': 'application/json' } });
+    }
     return await handleRequest(context);
 }
