@@ -197,8 +197,7 @@ function assembleChunks(chunks) {
  * @param {Object} env - 环境变量
  * @returns {Promise<{success: boolean, metadata?: Object, error?: string}>}
  */
-async function saveIndex(db, files, env) {
-  try {
+export async function saveIndex(db, files, env) {  try {
     const chunkSize = getIndexChunkSize(env);
     const chunks = [];
     

@@ -112,6 +112,11 @@ export async function handleGet(context) {
         continue;
       }
       
+      // 跳过导入过程中的累积记录键
+      if (item.name.startsWith('import@')) {
+        continue;
+      }
+
       // 跳过分块数据键（以 chunk_ 开头）
       if (item.name.startsWith('chunk_')) {
         continue;

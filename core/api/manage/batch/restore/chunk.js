@@ -6,6 +6,41 @@
 
 import { getDatabase } from '../../../../utils/databaseAdapter.js';
 import { cleanPersistedMetadata } from '../../../../utils/metadata/metadataSecurity.js';
+import { saveIndex } from '../index/finalize.js';
+
+// 导入时累积所有文件记录（原版备份 = KV dump，逐文件键 + 一份索引）
+const IMPORT_PENDING_KEY = 'import@files@pending';
+
+/**
+ * 导入文件时同步重建索引：
+ * 上游的「重建索引」要扫描整个 KV（EdgeOne KV 的 list 接口很慢，800+ 文件要跑很久），
+ * 而导入本身已经把每条记录送过来了，直接据此增量重写索引，导入完成即可在管理页看到。
+ */
+async function syncIndexWithPending(db, env, records) {
+  try {
+    const prevStr = await db.get(IMPORT_PENDING_KEY);
+    const map = new Map();
+    if (prevStr) {
+      try {
+        for (const r of JSON.parse(prevStr)) {
+          if (r && typeof r.id === 'string') map.set(r.id, r);
+        }
+      } catch (e) {
+        console.warn('[import] pending index corrupt, rebuilding from this chunk only');
+      }
+    }
+    for (const r of records) {
+      map.set(r.id, { id: r.id, metadata: r.metadata });
+    }
+    const all = Array.from(map.values());
+    await db.put(IMPORT_PENDING_KEY, JSON.stringify(all));
+    const result = await saveIndex(db, all, env);
+    return { totalCount: all.length, ok: !!result?.success };
+  } catch (error) {
+    console.warn('[import] sync index failed:', error?.message || error);
+    return { totalCount: 0, ok: false };
+  }
+}
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -101,6 +136,23 @@ export async function handlePost(context) {
           errors.push({ key: result.key, error: result.error });
         }
       }
+
+      // 导入文件后立刻同步索引，用户不用再手动点「重建索引」
+      const recordsForIndex = Object.entries(data)
+        .filter(([, fileData]) => fileData && fileData.metadata)
+        .map(([key, fileData]) => ({
+          id: key,
+          metadata: cleanPersistedMetadata(fileData.metadata),
+        }));
+      const indexSync = await syncIndexWithPending(db, env, recordsForIndex);
+      return jsonResponse({
+        success: true,
+        restoredCount,
+        failedCount,
+        errors: errors.length > 0 ? errors.slice(0, 10) : undefined, // 只返回前10个错误
+        indexTotalCount: indexSync.totalCount,
+        indexSynced: indexSync.ok,
+      });
     } else if (type === 'settings') {
       // 恢复系统设置 - 并行写入
       // 备份时移除了 manage@ 前缀，恢复时需要加回来
