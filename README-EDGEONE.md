@@ -1,103 +1,102 @@
-# CloudFlare ImgBed · EdgeOne Makers 版
+# EdgeOne ImgBed — 腾讯云 EdgeOne Makers 版部署说明
 
-把 [CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed) 移植到 **腾讯云 EdgeOne Makers**（原 EdgeOne Pages）部署：
-**边缘函数 + EdgeOne KV + S3 兼容对象存储**，不使用 Cloudflare 的 KV/D1/R2 绑定。
+本仓库是 [CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed) 的 EdgeOne（原 EdgeOne Pages，现 Makers）移植版。
+**不依赖 Node / Cloud Functions 运行时**，只用：
 
-## 一、和上游的差异
+- **Edge Functions**（`edge-functions/`，单一 catch-all 函数）承载全部动态逻辑
+- **EdgeOne KV**（变量名 `img_url`）存放文件元数据与配置
+- **S3 兼容对象存储渠道**（SigV4，纯 Web Crypto 实现）存放图片文件；不使用 R2 绑定
 
-| 项 | 上游（Cloudflare） | 本仓库（EdgeOne Makers） |
-|---|---|---|
-| 业务代码位置 | `functions/` | **`core/`**（避免被 Makers 当成 Pages Functions 自动挂成路由） |
-| 函数入口 | Pages Functions 目录路由 + `_middleware.js` | **`edge-functions/` 下的 8 个入口**，内部复用 `deploy/edgeone/index.js` 的路由表与中间件链 |
-| 元数据存储 | KV / D1 | **EdgeOne KV 命名空间**（`img_url` 绑定） |
-| 对象存储 | R2 绑定 / S3 / Telegram… | **S3 兼容渠道**（COS / R2 / MinIO…），不再有 R2 绑定 |
-| 定时任务 | Cron Trigger | 手动/外部定时请求 `/cron/expiry-cleanup` |
-| 前端分片 | 16MB 分片、20MB 以下整包 | **900KB 分片、>900KB 全部走分片**（EdgeOne 请求体上限 1MB） |
+> 注意：本 fork 把上游的 `functions/` 目录改名为 `core/`，因此**不能**再直接部署回 Cloudflare Pages（CF 靠 `functions/` 目录自动挂路由）。需要 CF 版请用上游仓库。
 
-新增文件：
+## 目录结构
 
 ```
-core/                         # 原 functions/ 业务代码（相对导入不变）
-deploy/edgeone/index.js       # EdgeOne 入口：路由表 + 中间件链（派生自 deploy/worker/index.js）
-deploy/edgeone/env.js         # env / caches / request.cf / 客户端 IP 适配
-deploy/edgeone/kv.js          # EdgeOne KV → Cloudflare KV 语义兼容层
-deploy/edgeone/local-smoke.mjs# 本地冒烟测试（内存 KV，不需要登录云平台）
-edge-functions/               # Makers 函数入口（api / upload / file / dav / random）
-scripts/patch-frontend-edgeone.mjs # 前端分片参数补丁（幂等）
-edgeone.json                  # 构建/输出目录配置
+core/                    业务处理逻辑（原上游 functions/）
+deploy/edgeone/
+  index.js               60+ 路由表 + 中间件链 + handleRequest(eventContext) 入口
+  env.js                 运行时适配：request.cf ← request.eo.geo，clientIp 兜底，env 代理
+  kv.js                  EdgeOne KV → Cloudflare KV 语义兼容层（key 编码 / metadata / TTL / list 翻页）
+  s3.js                  纯 Web Crypto 的 SigV4 S3 客户端（替代 @aws-sdk/client-s3，函数包体积从 45MB 降到 ~2.5MB）
+  cache.js               缓存旁路（EdgeOne 侧不再使用 caches.default）
+  local-smoke.mjs        本地冒烟测试（内存 KV + 假 S3）
+edge-functions/
+  [[default]].js         唯一函数入口（catch-all），转调 deploy/edgeone/index.js
+frontend-dist/           构建产物（首次部署前由 npm run build 生成/打补丁）
+scripts/patch-frontend-edgeone.mjs   前端补丁：分片/直传阈值压到 900KB（Edge Functions 请求体上限 1MB）
 ```
 
-### KV 兼容层做了什么
+## 关键坑（改代码前必读）
 
-EdgeOne KV 和 Cloudflare KV 有三处硬差异，`kv.js` 全部抹平：
+1. **函数目录必须叫 `edge-functions/` 或 `cloud-functions`**，叫 `functions/` 不会被识别。
+2. **只保留一个 catch-all 函数**。每个路由一个函数文件会让核心代码被打包 N 份（包体积超 5MB 上限后被平台静默丢弃）。
+3. **业务 handler 不能叫 `onRequestGet` / `onRequestPost` 等 Pages 命名**。EdgeOne 运行时会扫描包内这些命名导出并按 HTTP 方法直接调用，绕过入口的统一路由，表现为「所有 GET 都返回同一个接口」。本仓库已统一改名为 `handle` / `handleGet` / `handlePost` / `handleOptions`。
+4. 不要引入 `@aws-sdk/client-s3`、`@sentry/*` 等大依赖；S3 用 `deploy/edgeone/s3.js`。
+5. Edge Functions 限制：代码包 5MB、请求体 1MB、CPU 200ms、内存 128MB。因此大文件必须走分片上传（前端阈值已补丁到 900KB），合并时用单次 PutObject（`S3_SINGLE_PUT_MERGE=true`）。
 
-1. **key 只允许字母、数字、下划线** → 业务 key（`manage@index@meta`、`a/b/c.jpg`、`expiry@…`）按字符逐个编码，编码后仍是前缀封闭的，`list({prefix})` 语义不变。
-2. **没有 metadata** → 单独写 `_m_<key>` 存 JSON，`getWithMetadata` 读两条再合并。
-3. **没有 expirationTtl** → 单独写 `_t_<key>` 存过期时间戳，读取时惰性清理；`list` 单页上限 256（CF 是 1000），内部自动翻页补齐到请求的 limit。
+## 部署步骤
 
-### S3 分片上传的额外处理
-
-EdgeOne 边缘函数请求体只有 1MB，而 S3 multipart 每个 part 至少 5MB。所以开启 `S3_SINGLE_PUT_MERGE=true` 后：
-
-- 分块先写入 KV（`chunk_<uploadId>_<index>`，带 1 小时 TTL）
-- 合并接口把分块读出来拼成完整文件，**一次 `PutObject` 写进 S3**
-- 上传完成后清理 KV 里的临时分块
-
-> 单文件上限受「合并时的内存 + KV 单值 25MB」约束，建议控制在 25MB 内。
-
-## 二、部署步骤（EdgeOne Makers 控制台）
-
-1. **Fork / 导入仓库**：Makers 控制台 → 新建项目 → 连接 Git（GitHub / Gitee）→ 选本仓库，生产分支 `main`。
-2. **构建配置**已经写在 `edgeone.json`：
-   - `installCommand`: `npm install --workspaces=false --omit=dev`（只装 `@aws-sdk/client-s3`，不装 Docker 用的 native 依赖）
-   - `outputDirectory`: `./frontend-dist`
-   - `nodeVersion`: 22.11.0
-3. **开通 KV**：控制台 → KV 存储 → 一键开通（现已无需审核）→ 新建命名空间 → 在项目里绑定，**变量名必须是 `img_url`**。
-4. **环境变量**（项目设置 → 环境变量）：
-
-   | 变量 | 必填 | 说明 |
-   |---|---|---|
-   | `S3_SINGLE_PUT_MERGE` | 是 | 固定 `true`，启用 1MB 分片 + 单次 PutObject 合并 |
-   | `EXPIRY_CLEANUP_TOKEN` | 建议 | `/cron/expiry-cleanup` 的调用口令；不设则任何人可触发清理 |
-   | `SERVER_RUNTIME` | 否 | 代码会自动置为 `pages`，不用手动设 |
-
-5. **部署** → 打开默认域名 → 进入 `/admin` 用初始密码登录（与上游一致）。
-6. **配置 S3 渠道**：后台 → 上传设置 → S3 渠道，填 endpoint / region / bucket / ak / sk（腾讯云 COS 用 S3 兼容 endpoint，例如 `https://<bucket>.cos.<region>.myqcloud.com`，`pathStyle` 视存储实现而定）。
-7. **验证**：上传一张 >1MB 的图，确认走分片并在后台能看到记录；打开返回的 `/file/...` 链接能正常显示。
-
-### 定时清理（可选）
-
-EdgeOne 没有 Cron Trigger。可以用任意定时服务（腾讯云函数定时器、GitHub Actions、服务器 crontab）每天请求：
+### 1. 准备构建产物
 
 ```bash
-curl -H "x-cleanup-token: $EXPIRY_CLEANUP_TOKEN" https://<你的域名>/cron/expiry-cleanup
+npm install --workspaces=false
+npm run build        # 打前端补丁（分片 900KB），产物在 frontend-dist/
 ```
 
-## 三、本地自测（不需要云账号）
+### 2. 创建 KV 命名空间并绑定
+
+控制台 → EdgeOne Makers → 存储 → KV 新建命名空间（例如 `img_url`），
+再到 **项目 → KV** 页面把它绑定为变量名 **`img_url`**（必须叫这个名字，业务侧按此读取）。
+
+### 3. 设置环境变量（生产环境）
+
+| 变量 | 说明 |
+| --- | --- |
+| `BASIC_USER` / `BASIC_PASS` | 后台登录账号密码（强烈建议设置） |
+| `S3_SINGLE_PUT_MERGE` | 设为 `true`，分片合并改为单次 PutObject，避免超时 |
+| `EXPIRY_CLEANUP_TOKEN` | 可选，定时清理过期文件的口令 |
 
 ```bash
-npm install --workspaces=false --omit=dev
-npx esbuild deploy/edgeone/local-smoke.mjs --bundle --platform=node --format=esm \
-  --outfile=.tmp/smoke.mjs --external:@aws-sdk/client-s3
-node .tmp/smoke.mjs
+edgeone makers env set BASIC_USER=admin -e production
+edgeone makers env set BASIC_PASS=<你的密码> -e production
+edgeone makers env set S3_SINGLE_PUT_MERGE=true -e production
 ```
 
-会验证：路由 → 中间件 → KV 兼容层 → key 编码/前缀列举。
+### 4. 部署
 
-## 四、已知限制
+```bash
+npx edgeone login          # 首次
+npx edgeone makers deploy . -n <项目名> --json
+```
 
-- **请求体 1MB**：所有超过 900KB 的文件都走分片；单文件建议 ≤25MB（受内存与 KV 单值上限约束）。
-- **KV 最终一致（60s）**：刚上传的记录在其他边缘节点最长 60 秒后才可见，属平台特性。
-- **函数资源**：CPU 200ms / 内存 128MB / 代码包 5MB；免费版每月 300 万次执行、300 万毫秒 CPU、KV 1GB。
-- **默认域名**：Makers 默认域名带时效校验，长期使用请绑定自定义域名（加速区域含中国大陆时需 ICP 备案）。
-- **WebDAV / Telegram / Discord / HF** 渠道代码保留，但能否连通取决于 EdgeOne 节点的出网情况。
+部署后控制台「函数」tab 应显示一条 `^/(.*)$` 路由、runtime `Edge`。
+CLI 直传项目（direct upload）之后**不能**再切换成 Git 集成；要 Git 自动部署请在控制台用
+`/edgeone/makers/new?repository-url=<仓库地址>` 新建项目。
 
-## 五、升级上游
+### 5. 配置 S3 渠道（唯一需要手工填的凭据）
 
-1. 拉取上游 `functions/` → 覆盖到本仓库 `core/`；
-2. 重新生成 `deploy/worker/index.js`（`node deploy/worker/generate-routes.js`），再把导入路径 `../../functions/` 改成 `../../core/`，整份拷贝到 `deploy/edgeone/index.js`（保留 EdgeOne 入口与 `serverRuntime: 'pages'`）；
-3. 前端升级后重新执行 `node scripts/patch-frontend-edgeone.mjs`（分片大小会被新 bundle 覆盖）。
+登录后台 → 上传设置 → S3 渠道填：
 
-## 六、许可
+- Endpoint（如 `https://<account-id>.r2.cloudflarestorage.com` 或任意 S3 兼容服务）
+- Region、Bucket、AccessKeyId、SecretAccessKey
+- Path-Style：多数国内对象存储（腾讯云 COS / 七牛 / MinIO）需要开启
+- 可选 CDN 域名（用于拼接访问 URL）
 
-沿用上游 MIT License，原始版权与许可声明保留在 `LICENSE`。
+上传的文件走 SigV4 直传，不经 EdgeOne 中转存储。
+
+### 6. 验证
+
+```bash
+# 预置域名带时效 token，需先拿 cookie
+curl -c jar -L "https://<项目域名>?eo_token=..&eo_time=.." -o /dev/null
+curl -b jar "https://<项目域名>/api/zzz"            # 期望 404
+curl -b jar "https://<项目域名>/api/auth/sessionCheck"   # 期望 {"valid":false,...}
+curl -b jar -X POST "https://<项目域名>/api/auth/adminLogin" \
+  -H 'Content-Type: application/json' -d '{"username":"admin","password":"..."}'
+```
+
+## 已知限制 / 待办
+
+- 预置域名 `*.edgeone.cool` 带时效 token，长期对外使用需绑定自定义域名（大陆加速需 ICP 备案）。
+- `/api/manage/dedup/scan` 依赖 R2 绑定读取对象内容，EdgeOne 版返回 `supported` 但不做实际去重。
+- 缓存清理（CF purge / caches.default）在 EdgeOne 下为空实现。
