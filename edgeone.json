@@ -6,6 +6,30 @@
   "nodeVersion": "22.11.0",
   "caches": [
     {
+      "source": "/file/*",
+      "cacheTtl": 86400
+    },
+    {
+      "source": "/img/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/js/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/css/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/fonts/*",
+      "cacheTtl": 2592000
+    },
+    {
+      "source": "/static/*",
+      "cacheTtl": 2592000
+    },
+    {
       "source": "/*",
       "cacheTtl": 0
     }
