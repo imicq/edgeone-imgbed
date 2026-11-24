@@ -7,7 +7,7 @@
  * 运行：node scripts/patch-frontend-edgeone.mjs
  * 幂等：重复执行不会破坏文件。
  */
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -23,6 +23,9 @@ const REPLACEMENTS = [
     ['"discord"===o?9437184:16777216', `"discord"===o?${CHUNK_BYTES}:${CHUNK_BYTES}`],
     // 整包直传阈值：20MB -> 900KB（超过就走分片）
     ['const i=20971520;e.file.size>i', `const i=${CHUNK_BYTES};e.file.size>i`],
+    // Logo 跳转：上游只有首页头部传了 useConfigLink，其余页面永远跳默认 GitHub。
+    // 这里去掉 useConfigLink 限制，只要后台配置了 logoLink 就一律使用它。
+    ['this.useConfigLink&&this.userConfig?.logoLink', 'this.userConfig?.logoLink'],
 ];
 
 let source = readFileSync(BUNDLE, 'utf8');
@@ -46,6 +49,24 @@ if (changed > 0) {
     console.log(`patched ${changed} pattern(s) in ${BUNDLE}`);
 } else {
     console.log('nothing to patch');
+}
+
+// Logo 跳转补丁可能落在任意 chunk 里，这里全量扫一遍 frontend-dist/js。
+{
+    const JS_DIR = join(ROOT, 'frontend-dist', 'js');
+    const LOGO_FROM = 'this.useConfigLink&&this.userConfig?.logoLink';
+    const LOGO_TO = 'this.userConfig?.logoLink';
+    let files = 0;
+    for (const name of readdirSync(JS_DIR)) {
+        if (!name.endsWith('.js')) continue;
+        const file = join(JS_DIR, name);
+        const text = readFileSync(file, 'utf8');
+        if (!text.includes(LOGO_FROM)) continue;
+        writeFileSync(file, text.split(LOGO_FROM).join(LOGO_TO));
+        files += 1;
+        console.log(`patched logo link in ${name}`);
+    }
+    if (files === 0) console.log('logo link patch: nothing to do');
 }
 
 // ---------------------------------------------------------------------------
