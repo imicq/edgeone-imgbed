@@ -111,7 +111,9 @@ function ttlKey(key) {
 
 async function safeGet(raw, key, type) {
   try {
-    const value = type ? await raw.get(key, { type }) : await raw.get(key);
+    // 注意：EdgeOne KV 的 get 带 {type:'text'} 选项时异常缓慢（实测单次 30s+），
+    // 默认返回的就是字符串，所以 text 类型不传 options。
+    const value = type && type !== 'text' ? await raw.get(key, { type }) : await raw.get(key);
     return value === undefined ? null : value;
   } catch (error) {
     console.warn(`[kv] get ${key} failed: ${error?.message || error}`);
