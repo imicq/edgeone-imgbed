@@ -77,8 +77,10 @@ export async function handle(context) {  // Contents of context object
     // 从数据库中获取图片记录
     const db = getDatabase(env);
     const imgRecord = await db.getWithMetadata(fileId);
-    if (!imgRecord) {
-        return new Response('Error: Image Not Found', { status: 404 });
+    // EdgeOne KV 适配层在记录不存在时返回 { value: null, metadata: null }，
+    // 这里必须用 isMissingRecord 判断，否则会带着空 metadata 往下走、最终 500。
+    if (isMissingRecord(imgRecord)) {
+        return await return404(url);
     }
 
     // 如果metadata不存在，只可能是之前未设置KV，且存储在Telegraph上的图片
