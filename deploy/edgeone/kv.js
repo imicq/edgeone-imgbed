@@ -232,7 +232,7 @@ export class EdgeKVNamespace {
     while (names.length < limit) {
       const pageSize = Math.min(256, limit - names.length);
       const page = await this.raw.list({
-        prefix: encodedPrefix,
+        ...(encodedPrefix ? { prefix: encodedPrefix } : {}),
         limit: pageSize,
         ...(cursor ? { cursor } : {}),
       });
