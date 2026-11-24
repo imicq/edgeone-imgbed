@@ -197,13 +197,22 @@ function assembleChunks(chunks) {
  * @param {Object} env - 环境变量
  * @returns {Promise<{success: boolean, metadata?: Object, error?: string}>}
  */
-export async function saveIndex(db, files, env) {  try {
+export async function saveIndex(db, files, env) {
+  try {
     const chunkSize = getIndexChunkSize(env);
     const chunks = [];
-    
+
+    // 索引必须按上传时间倒序（新→旧）：上游统计「最早上传 / 最近上传」是直接取
+    // index.files[0] 和 index.files[length-1]，顺序不对时间就会显示错。
+    const ordered = [...files].sort((a, b) => {
+      const ta = Number(a?.metadata?.TimeStamp) || 0;
+      const tb = Number(b?.metadata?.TimeStamp) || 0;
+      return tb - ta;
+    });
+
     // 将文件数组分块
-    for (let i = 0; i < files.length; i += chunkSize) {
-      const chunk = files.slice(i, i + chunkSize);
+    for (let i = 0; i < ordered.length; i += chunkSize) {
+      const chunk = ordered.slice(i, i + chunkSize);
       chunks.push(chunk);
     }
 
