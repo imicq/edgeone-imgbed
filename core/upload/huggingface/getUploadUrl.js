@@ -30,7 +30,7 @@ export async function handlePost(context) {
         }
 
         // 检查上传IP是否被封禁
-        const uploadIp = getUploadIp(request);
+        const uploadIp = getUploadIp(request, context);
         if (await isBlockedUploadIp(env, uploadIp)) {
             return createResponse(JSON.stringify({ error: 'IP blocked' }), {
                 status: 403,

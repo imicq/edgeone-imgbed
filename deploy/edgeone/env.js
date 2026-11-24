@@ -137,12 +137,21 @@ export function toPagesContext(context) {
   const request = normalizeRequest(context.request);
   const env = createEdgeEnv(context);
 
+  const clientIp = resolveClientIp(context, request);
+  if (clientIp) {
+    try {
+      Object.defineProperty(request, 'clientIp', { value: clientIp, configurable: true });
+    } catch {
+      // Request 不可扩展时忽略
+    }
+  }
+
   return {
     request,
     env,
     params: context.params || {},
     data: { serverRuntime: 'pages' },
-    clientIp: context.clientIp || request.eo?.clientIp || '',
+    clientIp,
     waitUntil: (promise) => {
       if (typeof context.waitUntil === 'function') {
         context.waitUntil(promise);
@@ -153,4 +162,27 @@ export function toPagesContext(context) {
     passThroughOnException: () => {},
     next: null,
   };
+}
+
+/**
+ * 解析客户端 IP。EdgeOne 不注入 cf-connecting-ip，依次尝试：
+ * 上下文客户端 IP / request.eo.clientIp / eo 系列请求头 / 常见转发头。
+ */
+export function resolveClientIp(context, request) {
+  const direct = context?.clientIp || request?.eo?.clientIp;
+  if (direct) return String(direct);
+
+  for (const name of [
+    'eo-client-ip',
+    'eo-connecting-ip',
+    'cf-connecting-ip',
+    'x-real-ip',
+    'x-forwarded-for',
+    'x-client-ip',
+  ]) {
+    const value = request?.headers?.get?.(name);
+    if (value) return value.split(',')[0].trim();
+  }
+
+  return '';
 }

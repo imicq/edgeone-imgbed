@@ -105,7 +105,7 @@ export async function handlePost(context) {
         const normalizedDirectory = dirParts === '' ? '' : dirParts + '/';
 
         // 获取上传IP和地址
-        const uploadIp = getUploadIp(request) || '';
+        const uploadIp = getUploadIp(request, context) || '';
         const uploadAddress = await getIPAddress(env, uploadIp);
 
         // 构建 metadata

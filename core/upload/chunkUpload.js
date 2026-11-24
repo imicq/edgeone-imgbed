@@ -34,7 +34,7 @@ export async function initializeChunkedUpload(context) {
         const uploadId = `upload_${timestamp}_${random}`;
 
         // 获取上传IP
-        const uploadIp = getUploadIp(request);
+        const uploadIp = getUploadIp(request, context);
         const ipAddress = await getIPAddress(env, uploadIp, context.securityConfig);
 
         // 获取上传渠道

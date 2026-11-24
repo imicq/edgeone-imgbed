@@ -39,7 +39,7 @@ export async function handle(context) {  // Contents of context object
     }
 
     // 获得上传IP
-    const uploadIp = getUploadIp(request);
+    const uploadIp = getUploadIp(request, context);
     // 判断上传ip是否被封禁
     const isBlockedIp = await isBlockedUploadIp(env, uploadIp);
     if (isBlockedIp) {
@@ -98,7 +98,7 @@ async function processFileUpload(context, formdata = null) {
     const urlParamChannelName = url.searchParams.get('channelName');
 
     // 获取IP地址
-    const uploadIp = getUploadIp(request);
+    const uploadIp = getUploadIp(request, context);
     const ipAddress = await getIPAddress(context.env, uploadIp, context.securityConfig);
 
     // 获取上传文件夹路径
