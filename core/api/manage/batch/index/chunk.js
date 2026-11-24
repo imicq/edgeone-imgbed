@@ -342,11 +342,29 @@ export async function handlePost(context) {
 
     await db.put(chunkKey, JSON.stringify(chunkData));
 
+    // 兼容「从原版 CF 备份导入」场景：
+    // 上游的「重建索引」是扫描 KV 中每个文件自己的键（键名=文件ID，metadata 里存文件信息），
+    // 只写索引分块的话，重建索引时一条都扫不到（会把索引清空）。
+    // 所以导入的每条记录都同步写一份逐文件键，行为与正常上传保持一致。
+    const hydrateResults = await Promise.all(
+      sanitizedData.map((record) =>
+        db
+          .put(record.id, '', { metadata: record.metadata })
+          .then(() => true)
+          .catch((error) => {
+            console.warn(`[import] hydrate ${record.id} failed: ${error?.message || error}`);
+            return false;
+          })
+      )
+    );
+    const hydrated = hydrateResults.filter(Boolean).length;
+
     // 8. 返回成功响应
     return jsonResponse({
       success: true,
       chunkId,
       storedCount: sanitizedData.length,
+      hydratedCount: hydrated,
     });
 
   } catch (error) {
