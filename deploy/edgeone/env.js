@@ -88,17 +88,10 @@ export function normalizeRequest(request) {
     request.headers.get('x-real-ip');
   if (hasClientIp) return request;
 
-  const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0].trim() : request.eo?.clientIp;
-  if (!ip) return request;
-
-  try {
-    const headers = new Headers(request.headers);
-    headers.set('x-real-ip', ip);
-    return new Request(request, { headers });
-  } catch {
-    return request;
-  }
+  // 注意：EdgeOne 的 Request 实现里 `new Request(request, { headers })` 会丢失原始 URL，
+  // 直接复用它会让后续基于 url.pathname 的路由分发全部失效，所以这里不再重建 Request。
+  // 客户端 IP 由业务侧通过 request.eo.clientIp / x-forwarded-for 兜底获取。
+  return request;
 }
 
 /**
