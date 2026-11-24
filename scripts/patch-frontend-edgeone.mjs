@@ -26,6 +26,16 @@ const REPLACEMENTS = [
     // Logo 跳转：上游只有首页头部传了 useConfigLink，其余页面永远跳默认 GitHub。
     // 这里去掉 useConfigLink 限制，只要后台配置了 logoLink 就一律使用它。
     ['this.useConfigLink&&this.userConfig?.logoLink', 'this.userConfig?.logoLink'],
+    // 首页中间「站名/作者名」链接：上游写死成 GitHub 仓库地址，这里改成读取后台
+    // 配置的「Logo跳转链接」(logoLink)，未配置时回落到站点根路径。
+    [
+        'ownerName(){return this.configuredOwnerName||"Sanyue"},',
+        'ownerName(){return this.configuredOwnerName||"Sanyue"},titleHref(){return this.userConfig?.logoLink||""},',
+    ],
+    [
+        '(0,l.Lk)("a",Oo,(0,n.v_)(d.ownerName),1)',
+        '(0,l.Lk)("a",{class:"main-title",href:d.titleHref||"/",target:"_blank"},(0,n.v_)(d.ownerName),1)',
+    ],
 ];
 
 let source = readFileSync(BUNDLE, 'utf8');

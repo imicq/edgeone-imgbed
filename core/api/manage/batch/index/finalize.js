@@ -351,6 +351,29 @@ export async function handlePost(context) {
 
     // 5. 处理空索引的情况
     if (totalChunks === 0 || totalFiles === 0) {
+      // 安全护栏：如果 KV 里本来就有 N 条索引（例如是从原版 CF 备份导入的，
+      // 逐文件元数据并不在 EdgeOne 的 KV 里），此时"重建索引"扫描不到任何文件，
+      // 直接清空会把已有图片索引全部抹掉。这里保留原索引，只回报扫描结果。
+      const existingMetaStr = await db.get(INDEX_META_KEY);
+      let existingCount = 0;
+      if (existingMetaStr) {
+        try {
+          existingCount = Number(JSON.parse(existingMetaStr).totalCount) || 0;
+        } catch (e) {
+          existingCount = 0;
+        }
+      }
+
+      if (existingCount > 0) {
+        console.warn(`Rebuild found 0 files but index already holds ${existingCount}; keeping existing index.`);
+        return jsonResponse({
+          success: true,
+          indexedCount: existingCount,
+          preserved: true,
+          message: `未扫描到可重建的文件，已保留原有索引（${existingCount} 条）`,
+        });
+      }
+
       // 保存空索引
       const saveResult = await saveIndex(db, [], env);
       if (!saveResult.success) {
