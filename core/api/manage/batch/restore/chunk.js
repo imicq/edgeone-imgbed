@@ -8,38 +8,96 @@ import { getDatabase } from '../../../../utils/databaseAdapter.js';
 import { cleanPersistedMetadata } from '../../../../utils/metadata/metadataSecurity.js';
 import { saveIndex } from '../index/finalize.js';
 
-/**
- * 导入文件时同步重建索引：
- * 上游的「重建索引」要扫描整个 KV（EdgeOne KV 的 list 接口很慢，800+ 文件要跑很久），
- * 而导入本身已经把每条记录送过来了，直接据此增量重写索引，导入完成即可在管理页看到。
- */
-async function syncIndexWithPending(db, env, records) {
+// 导入会话：记录本次导入的起点（导入前索引里有哪些 id）与已导入的记录。
+// 设置分块永远排在文件分块之后，所以收到 settings 分块时即可判定「文件导入已结束」，
+// 此时把「导入前存在、本次备份里没有」的残留记录从 KV 中删掉，实现整库覆盖。
+const IMPORT_SESSION_KEY = 'import@files@session';
+const IMPORT_SESSION_TTL_MS = 60 * 60 * 1000; // 1 小时没动静就当作新的一次导入
+
+/** 读取当前索引里的全部记录（可能失败，失败返回空数组） */
+async function readIndexRecords(db) {
+  const records = [];
   try {
-    const map = new Map();
-    // 始终以当前索引为基底，避免「只导入了半批」把原有记录挤掉；
-    // 也不落中间态到 KV，免得删掉的探针/旧记录在下次导入时被合并回来。
-    try {
-      const metaStr = await db.get('manage@index@meta');
-      const chunkCount = metaStr ? Number(JSON.parse(metaStr).chunkCount) || 0 : 0;
-      for (let i = 0; i < chunkCount; i += 1) {
-        const chunkStr = await db.get(`manage@index_${i}`);
-        if (!chunkStr) continue;
-        for (const r of JSON.parse(chunkStr)) {
-          if (r && typeof r.id === 'string') map.set(r.id, r);
-        }
+    const metaStr = await db.get('manage@index@meta');
+    const chunkCount = metaStr ? Number(JSON.parse(metaStr).chunkCount) || 0 : 0;
+    for (let i = 0; i < chunkCount; i += 1) {
+      const chunkStr = await db.get(`manage@index_${i}`);
+      if (!chunkStr) continue;
+      for (const r of JSON.parse(chunkStr)) {
+        if (r && typeof r.id === 'string') records.push({ id: r.id, metadata: r.metadata || {} });
       }
-    } catch (e) {
-      console.warn('[import] read existing index failed:', e?.message || e);
     }
+  } catch (e) {
+    console.warn('[import] read existing index failed:', e?.message || e);
+  }
+  return records;
+}
+
+/**
+ * 导入文件：以「本次导入的记录」为准重建索引（整库覆盖语义），
+ * 导入完成即可在管理页看到，不需要再点「重建索引」。
+ */
+async function syncIndexForImport(db, env, records) {
+  try {
+    const now = Date.now();
+    let session = null;
+    const raw = await db.get(IMPORT_SESSION_KEY);
+    if (raw) {
+      try {
+        session = JSON.parse(raw);
+      } catch (e) {
+        session = null;
+      }
+    }
+    if (!session || !session.startedAt || now - session.startedAt > IMPORT_SESSION_TTL_MS) {
+      const existing = await readIndexRecords(db);
+      session = { startedAt: now, prevIds: existing.map((r) => r.id), records: [] };
+    }
+
+    const map = new Map(session.records.map((r) => [r.id, r]));
     for (const r of records) {
       map.set(r.id, { id: r.id, metadata: r.metadata });
     }
-    const all = Array.from(map.values());
-    const result = await saveIndex(db, all, env);
-    return { totalCount: all.length, ok: !!result?.success };
+    session.records = Array.from(map.values());
+    session.updatedAt = now;
+
+    await db.put(IMPORT_SESSION_KEY, JSON.stringify(session));
+    const result = await saveIndex(db, session.records, env);
+    return { totalCount: session.records.length, ok: !!result?.success };
   } catch (error) {
     console.warn('[import] sync index failed:', error?.message || error);
     return { totalCount: 0, ok: false };
+  }
+}
+
+/**
+ * 导入收尾（在收到设置分块时触发）：
+ * 删掉「导入前有、本次备份里没有」的残留记录，并清理导入会话。
+ */
+async function finishImport(db, env) {
+  try {
+    const raw = await db.get(IMPORT_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    const importedIds = new Set((session.records || []).map((r) => r.id));
+    const staleIds = (session.prevIds || []).filter((id) => !importedIds.has(id));
+
+    let deletedCount = 0;
+    for (const id of staleIds) {
+      try {
+        await db.delete(id);
+        deletedCount += 1;
+      } catch (e) {
+        console.warn(`[import] delete stale ${id} failed: ${e?.message || e}`);
+      }
+    }
+
+    await saveIndex(db, session.records || [], env);
+    await db.delete(IMPORT_SESSION_KEY);
+    return { importedCount: importedIds.size, deletedStaleCount: deletedCount, staleIds: staleIds.slice(0, 20) };
+  } catch (error) {
+    console.warn('[import] finish failed:', error?.message || error);
+    return null;
   }
 }
 
@@ -145,7 +203,7 @@ export async function handlePost(context) {
           id: key,
           metadata: cleanPersistedMetadata(fileData.metadata),
         }));
-      const indexSync = await syncIndexWithPending(db, env, recordsForIndex);
+      const indexSync = await syncIndexForImport(db, env, recordsForIndex);
       return jsonResponse({
         success: true,
         restoredCount,
@@ -179,6 +237,22 @@ export async function handlePost(context) {
           errors.push({ key: result.key, error: result.error });
         }
       }
+
+      // 设置分块是导入流程的最后一步：此时收尾，把备份里没有的残留记录删掉，
+      // 让本地的 KV/索引与备份完全一致（整库覆盖）。
+      const finalize = await finishImport(db, env);
+      return jsonResponse({
+        success: true,
+        restoredCount,
+        failedCount,
+        errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+        ...(finalize
+          ? {
+              importedCount: finalize.importedCount,
+              deletedStaleCount: finalize.deletedStaleCount,
+            }
+          : {}),
+      });
     }
 
     return jsonResponse({
