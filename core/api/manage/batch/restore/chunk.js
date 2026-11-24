@@ -8,9 +8,6 @@ import { getDatabase } from '../../../../utils/databaseAdapter.js';
 import { cleanPersistedMetadata } from '../../../../utils/metadata/metadataSecurity.js';
 import { saveIndex } from '../index/finalize.js';
 
-// 导入时累积所有文件记录（原版备份 = KV dump，逐文件键 + 一份索引）
-const IMPORT_PENDING_KEY = 'import@files@pending';
-
 /**
  * 导入文件时同步重建索引：
  * 上游的「重建索引」要扫描整个 KV（EdgeOne KV 的 list 接口很慢，800+ 文件要跑很久），
@@ -18,37 +15,26 @@ const IMPORT_PENDING_KEY = 'import@files@pending';
  */
 async function syncIndexWithPending(db, env, records) {
   try {
-    const prevStr = await db.get(IMPORT_PENDING_KEY);
     const map = new Map();
-    if (prevStr) {
-      try {
-        for (const r of JSON.parse(prevStr)) {
+    // 始终以当前索引为基底，避免「只导入了半批」把原有记录挤掉；
+    // 也不落中间态到 KV，免得删掉的探针/旧记录在下次导入时被合并回来。
+    try {
+      const metaStr = await db.get('manage@index@meta');
+      const chunkCount = metaStr ? Number(JSON.parse(metaStr).chunkCount) || 0 : 0;
+      for (let i = 0; i < chunkCount; i += 1) {
+        const chunkStr = await db.get(`manage@index_${i}`);
+        if (!chunkStr) continue;
+        for (const r of JSON.parse(chunkStr)) {
           if (r && typeof r.id === 'string') map.set(r.id, r);
         }
-      } catch (e) {
-        console.warn('[import] pending index corrupt, rebuilding from current index + this chunk');
       }
-    } else {
-      // 首次导入：以当前已有索引为基底，避免「只导入了半批」时把原有记录挤掉
-      try {
-        const metaStr = await db.get('manage@index@meta');
-        const chunkCount = metaStr ? Number(JSON.parse(metaStr).chunkCount) || 0 : 0;
-        for (let i = 0; i < chunkCount; i += 1) {
-          const chunkStr = await db.get(`manage@index_${i}`);
-          if (!chunkStr) continue;
-          for (const r of JSON.parse(chunkStr)) {
-            if (r && typeof r.id === 'string') map.set(r.id, r);
-          }
-        }
-      } catch (e) {
-        console.warn('[import] read existing index failed:', e?.message || e);
-      }
+    } catch (e) {
+      console.warn('[import] read existing index failed:', e?.message || e);
     }
     for (const r of records) {
       map.set(r.id, { id: r.id, metadata: r.metadata });
     }
     const all = Array.from(map.values());
-    await db.put(IMPORT_PENDING_KEY, JSON.stringify(all));
     const result = await saveIndex(db, all, env);
     return { totalCount: all.length, ok: !!result?.success };
   } catch (error) {
