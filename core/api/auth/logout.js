@@ -1,6 +1,6 @@
 import { destroySession } from "../../utils/auth/sessionManager.js";
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     const { request, env } = context;
 
     // 从请求体中获取要登出的类型，默认清除所有

@@ -34,7 +34,7 @@ function jsonResponse(data, status = 200) {
 /**
  * 处理 GET 请求 - 获取索引配置
  */
-export async function onRequestGet(context) {
+export async function handleGet(context) {
   const { env } = context;
 
   try {
@@ -54,13 +54,13 @@ export async function onRequestGet(context) {
 /**
  * 处理 OPTIONS 请求 - CORS 预检
  */
-export async function onRequestOptions() {
+export async function handleOptions() {
   return new Response(null, { status: 204, headers: corsHeaders });
 }
 
-export async function onRequest(context) {
+export async function handle(context) {
   const { request } = context;
-  if (request.method === 'GET') return onRequestGet(context);
-  if (request.method === 'OPTIONS') return onRequestOptions();
+  if (request.method === 'GET') return handleGet(context);
+  if (request.method === 'OPTIONS') return handleOptions();
   return jsonResponse({ success: false, error: 'Method not allowed' }, 405);
 }

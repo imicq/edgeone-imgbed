@@ -3,7 +3,7 @@ import { hashPassword, isHashed } from '../../../utils/auth/passwordHash.js';
 import { destroySessionsByAuthType } from '../../../utils/auth/sessionManager.js';
 import { normalizeSessionMaxAgeDays } from '../../../utils/auth/sessionConfig.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     // 安全设置相关，GET方法读取设置，POST方法保存设置
     const {
       request, // same as existing Worker API

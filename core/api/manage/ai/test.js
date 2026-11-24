@@ -2,7 +2,7 @@ import { getAIConfig, prepareAIConfig } from '../../../utils/ai/config.js';
 import { createAIContext } from '../../../utils/ai/index.js';
 import { json, readJSON, errorResponse } from '../../../utils/apiResponse.js';
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     try {
         const body = await readJSON(context.request);
         const old = await getAIConfig(context.env);

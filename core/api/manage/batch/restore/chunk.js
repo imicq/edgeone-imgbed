@@ -42,7 +42,7 @@ function errorResponse(message, status = 400, details = null) {
 /**
  * 处理 POST 请求 - 恢复一批文件数据
  */
-export async function onRequestPost(context) {
+export async function handlePost(context) {
   const { request, env } = context;
 
   try {
@@ -144,7 +144,7 @@ export async function onRequestPost(context) {
 /**
  * 处理 OPTIONS 请求 - CORS 预检
  */
-export async function onRequestOptions() {
+export async function handleOptions() {
   return new Response(null, {
     status: 204,
     headers: corsHeaders,
@@ -154,15 +154,15 @@ export async function onRequestOptions() {
 /**
  * 默认请求处理器
  */
-export async function onRequest(context) {
+export async function handle(context) {
   const { request } = context;
 
   if (request.method === 'POST') {
-    return onRequestPost(context);
+    return handlePost(context);
   }
 
   if (request.method === 'OPTIONS') {
-    return onRequestOptions();
+    return handleOptions();
   }
 
   return errorResponse('Method not allowed', 405);

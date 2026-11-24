@@ -2,7 +2,7 @@ import { getDatabase } from "../../../utils/databaseAdapter.js";
 import { applyTagItems, validateFileId } from "../../../utils/tagService.js";
 import { APIError, json, readJSON, errorResponse } from "../../../utils/apiResponse.js";
 
-export async function onRequest(context) {
+export async function handle(context) {
     try {
         const fileId = decodeURIComponent((context.params.path || []).join('/'));
         validateFileId(fileId);

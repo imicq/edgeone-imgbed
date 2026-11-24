@@ -12,7 +12,7 @@ const corsHeaders = {
     'Access-Control-Max-Age': '86400',
 };
 
-export async function onRequest(context) {
+export async function handle(context) {
     if (context.request.method !== 'POST') {
         return jsonResponse({ success: false, error: 'Method not allowed' }, 405);
     }

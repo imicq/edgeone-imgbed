@@ -91,7 +91,7 @@ async function readRecordBytes(env, fileId, meta, maxFileBytes, deadline) {
     return null;
 }
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env } = context;
 
     // 能力标志:只有 Node 服务端部署提供(Workers/Pages 即便绑定 D1 也没有)。

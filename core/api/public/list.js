@@ -114,7 +114,7 @@ async function getPublicFileList(context, url, dir, recursive) {
     return cacheData;
 }
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env } = context;
     const url = new URL(request.url);
 

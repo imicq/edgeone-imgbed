@@ -289,7 +289,7 @@ function validateRequestBody(body) {
  * @param {Object} context - Cloudflare Workers 上下文
  * @returns {Promise<Response>}
  */
-export async function onRequestPost(context) {
+export async function handlePost(context) {
   const { request, env } = context;
 
   try {
@@ -360,7 +360,7 @@ export async function onRequestPost(context) {
  * 
  * @returns {Response}
  */
-export async function onRequestOptions() {
+export async function handleOptions() {
   return new Response(null, {
     status: 204,
     headers: corsHeaders,
@@ -373,15 +373,15 @@ export async function onRequestOptions() {
  * @param {Object} context - Cloudflare Workers 上下文
  * @returns {Promise<Response>}
  */
-export async function onRequest(context) {
+export async function handle(context) {
   const { request } = context;
   
   if (request.method === 'POST') {
-    return onRequestPost(context);
+    return handlePost(context);
   }
   
   if (request.method === 'OPTIONS') {
-    return onRequestOptions();
+    return handleOptions();
   }
   
   return errorResponse('Method not allowed', 405);

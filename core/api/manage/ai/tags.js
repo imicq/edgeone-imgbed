@@ -6,7 +6,7 @@ import { normalizeMimeType } from '../../../utils/mimeTypes.js';
 
 const MAX_IMAGE_BYTES = 256 * 1024;
 const ORIGINAL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif']);
-export async function onRequest(context) {
+export async function handle(context) {
     try {
         const ai = createAIContext(context.env);
         const config = await ai.getConfig();

@@ -99,7 +99,7 @@ function isPrivateHostname(hostname) {
     return false;
 }
 
-export async function onRequest(context) {
+export async function handle(context) {
     // 获取请求体中URL的内容
     const {
         request,

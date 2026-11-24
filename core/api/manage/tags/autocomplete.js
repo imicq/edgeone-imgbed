@@ -8,7 +8,7 @@ import { filterTagsByPrefix } from "../../../utils/tagHelpers.js";
  *
  * Returns all tags matching the given prefix, useful for autocomplete functionality
  */
-export async function onRequest(context) {
+export async function handle(context) {
     const { request } = context;
 
     const url = new URL(request.url);

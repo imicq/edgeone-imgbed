@@ -14,7 +14,7 @@ const corsHeaders = {
 let othersConfig = {};
 let allowRandom = false;
 
-export async function onRequest(context) {
+export async function handle(context) {
     // Contents of context object
     const {
       request, // same as existing Worker API

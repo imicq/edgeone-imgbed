@@ -13,7 +13,7 @@ const corsHeaders = {
     'Access-Control-Max-Age': '86400',
 };
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env, params, waitUntil } = context;
 
     // OPTIONS 预检请求

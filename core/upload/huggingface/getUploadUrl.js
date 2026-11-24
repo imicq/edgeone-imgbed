@@ -17,7 +17,7 @@ import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.j
 import { buildUniqueFileId, getUploadIp, isBlockedUploadIp, createResponse, checkUploadFormat } from '../uploadTools.js';
 import { resolveUploadExpiry } from '../../utils/fileExpiryService.js';
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     const { request, env } = context;
     const url = new URL(request.url);
     context.url = url;  // 将 url 添加到 context 以便 buildUniqueFileId 使用

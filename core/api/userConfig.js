@@ -4,7 +4,7 @@
  */
 import { fetchPageConfig, fetchUploadConfig } from "../utils/sysConfig.js";
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { env } = context;
     const PageConfig = await fetchPageConfig(env);
     const userConfigList = PageConfig.config;

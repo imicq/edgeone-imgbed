@@ -10,7 +10,7 @@ import { destroySessionsByAuthType } from "../../utils/auth/sessionManager.js";
  * 3. 成功后所有认证配置被清除，可以直接进入管理端重新设置
  * 4. 用完后建议删除或更换 RESET_KEY 环境变量
  */
-export async function onRequestGet(context) {
+export async function handleGet(context) {
     const { request, env } = context;
 
     // 检查是否配置了重置密钥

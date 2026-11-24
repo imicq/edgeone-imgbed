@@ -1,7 +1,7 @@
 import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
 import { createResponse } from '../uploadTools.js';
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     const { request, env } = context;
     const url = new URL(request.url);
 

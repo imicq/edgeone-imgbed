@@ -4,7 +4,7 @@ import { getDatabase } from "../utils/databaseAdapter";
 import { createApiToken } from "../api/manage/apiTokens";
 import { normalizeFileType } from '../utils/mimeTypes.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env } = context;
 
     // WebDAV 规范：如果请求的是根目录 /dav 但没有斜杠，重定向到 /dav/，以保证客户端的 href 匹配

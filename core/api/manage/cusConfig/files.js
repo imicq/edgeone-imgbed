@@ -2,7 +2,7 @@ import { readIndex } from "../../../utils/indexManager";
 import { getDatabase } from "../../../utils/databaseAdapter.js";
 import { buildFileMetadataForManagement, createMetadataViewContext } from "../../../utils/metadata/metadataView.js";
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request } = context;
     const url = new URL(request.url);
     const ip = url.searchParams.get('ip');

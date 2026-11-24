@@ -7,7 +7,7 @@ import { getUploadConfig } from './manage/sysConfig/upload.js';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { dualAuthCheck } from '../utils/auth/dualAuth.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env } = context;
 
     if (request.method !== 'GET') {

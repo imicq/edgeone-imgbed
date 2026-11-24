@@ -1,7 +1,7 @@
 import { applyTagItems } from "../../../utils/tagService.js";
 import { APIError, json, readJSON, errorResponse } from "../../../utils/apiResponse.js";
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     try {
         const { fileIds, tags, action = 'set', repairIndexIds = [] } = await readJSON(context.request);
         if (!Array.isArray(fileIds)) throw new APIError('INVALID_INPUT', 'fileIds must be an array.');

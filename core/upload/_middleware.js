@@ -19,4 +19,4 @@ async function handleOptions(context) {
     return context.next();
 }
 
-export const onRequest = [checkDatabaseConfig, handleOptions, errorHandling, telemetryData];
+export const handle = [checkDatabaseConfig, handleOptions, errorHandling, telemetryData];

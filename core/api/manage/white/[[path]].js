@@ -3,7 +3,7 @@ import { addFileToIndex } from "../../../utils/indexManager.js";
 import { getDatabase } from "../../../utils/databaseAdapter.js";
 import { cleanPersistedMetadata } from "../../../utils/metadata/metadataSecurity.js";
 
-export async function onRequest(context) {
+export async function handle(context) {
     // Contents of context object
     const {
       request, // same as existing Worker API

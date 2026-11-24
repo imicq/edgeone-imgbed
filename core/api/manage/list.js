@@ -14,7 +14,7 @@ const corsHeaders = {
     'Access-Control-Max-Age': '86400',
 };
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, waitUntil } = context;
     const url = new URL(request.url);
 

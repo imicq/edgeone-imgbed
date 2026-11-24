@@ -1,6 +1,6 @@
 import { readIndex } from "../../../utils/indexManager";
 
-export async function onRequest(context) {
+export async function handle(context) {
     // Contents of context object
     const {
       request, // same as existing Worker API

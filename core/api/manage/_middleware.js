@@ -94,4 +94,4 @@ async function authentication(context) {
   return context.next();
 }
 
-export const onRequest = [errorHandling, authentication];
+export const handle = [errorHandling, authentication];

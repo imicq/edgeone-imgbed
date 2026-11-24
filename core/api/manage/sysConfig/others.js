@@ -1,7 +1,7 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { createApiToken, deleteApiToken } from '../apiTokens.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     // 其他设置相关，GET方法读取设置，POST方法保存设置
     const {
       request, // same as existing Worker API

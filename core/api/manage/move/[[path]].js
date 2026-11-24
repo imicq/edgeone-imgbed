@@ -11,7 +11,7 @@ import {
 } from "../../../utils/metadata/channelCredentials.js";
 import { cleanPersistedMetadata } from "../../../utils/metadata/metadataSecurity.js";
 
-export async function onRequest(context) {
+export async function handle(context) {
     const { request, env, params, waitUntil } = context;
 
     const url = new URL(request.url);

@@ -64,7 +64,7 @@ function isChunkedFileNeedingValue(metadata) {
  * @param {Object} context - Cloudflare Workers 上下文
  * @returns {Promise<Response>}
  */
-export async function onRequestGet(context) {
+export async function handleGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
@@ -165,7 +165,7 @@ export async function onRequestGet(context) {
  * 
  * @returns {Response}
  */
-export async function onRequestOptions() {
+export async function handleOptions() {
   return new Response(null, {
     status: 204,
     headers: corsHeaders,
@@ -178,15 +178,15 @@ export async function onRequestOptions() {
  * @param {Object} context - Cloudflare Workers 上下文
  * @returns {Promise<Response>}
  */
-export async function onRequest(context) {
+export async function handle(context) {
   const { request } = context;
   
   if (request.method === 'GET') {
-    return onRequestGet(context);
+    return handleGet(context);
   }
   
   if (request.method === 'OPTIONS') {
-    return onRequestOptions();
+    return handleOptions();
   }
   
   return errorResponse('Method not allowed', 405);

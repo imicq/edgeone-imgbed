@@ -1,6 +1,6 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     // Contents of context object
     const {
       request, // same as existing Worker API

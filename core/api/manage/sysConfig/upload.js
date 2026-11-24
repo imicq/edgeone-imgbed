@@ -4,7 +4,7 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { normalizeWebDAVHeaders } from '../../../utils/storage/webdavAPI.js';
 import { normalizeS3UserAgent } from '../../../utils/storage/s3Client.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     // 上传设置相关，GET方法读取设置，POST方法保存设置
     const {
         request, // same as existing Worker API

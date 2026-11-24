@@ -17,7 +17,7 @@ import { fetchPageConfig } from '../utils/sysConfig';
  * - 管理端鉴权成功：始终允许访问
  * - 用户端鉴权成功：仅当 showDirectorySuggestions 开启时允许访问
  */
-export async function onRequestGet(context) {
+export async function handleGet(context) {
     const { env, request } = context;
     const url = new URL(request.url);
     

@@ -2,7 +2,7 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { AI_CONFIG_KEY, getAIConfig, prepareAIConfig, publicAIConfig } from '../../../utils/ai/config.js';
 import { APIError, json, readJSON, errorResponse } from '../../../utils/apiResponse.js';
 
-export async function onRequest(context) {
+export async function handle(context) {
     try {
         const old = await getAIConfig(context.env);
         if (context.request.method === 'GET') return json(publicAIConfig(old, context.env));

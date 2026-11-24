@@ -3,7 +3,7 @@ import { verifyPassword, rehashIfNeeded } from "../../utils/auth/passwordHash.js
 import { createSession } from "../../utils/auth/sessionManager.js";
 import { getDatabase } from "../../utils/databaseAdapter.js";
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     const { request, env } = context;
 
     const { username, password } = await request.json();

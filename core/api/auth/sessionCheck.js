@@ -6,7 +6,7 @@ import { fetchSecurityConfig } from "../../utils/sysConfig.js";
  * 用于前端路由守卫检查当前会话是否有效
  * 同时返回各端是否需要认证
  */
-export async function onRequestGet(context) {
+export async function handleGet(context) {
     const { request, env } = context;
 
     // 读取安全配置，判断是否需要认证

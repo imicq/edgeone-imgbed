@@ -3,7 +3,7 @@
  *
  * 由 deploy/worker/index.js（Workers 入口，自动生成）派生，路由表与中间件链保持不变，
  * 只替换运行时差异：
- *   - 入口由 EdgeOne 的 onRequest 触发，不再是 Cloudflare 的 fetch/scheduled
+ *   - 入口由 EdgeOne 的 handle 触发，不再是 Cloudflare 的 fetch/scheduled
  *   - 环境绑定、KV、caches、request.cf 由 deploy/edgeone/env.js 适配
  *   - 没有 ASSETS 绑定，未命中的路径交给 Makers 静态资源处理
  */
@@ -161,11 +161,11 @@ function matchRoute(pathname) {
 function collectMiddlewares(middlewareModules) {
     const handlers = [];
     for (const mod of middlewareModules) {
-        if (mod.onRequest) {
-            if (Array.isArray(mod.onRequest)) {
-                handlers.push(...mod.onRequest);
+        if (mod.handle) {
+            if (Array.isArray(mod.handle)) {
+                handlers.push(...mod.handle);
             } else {
-                handlers.push(mod.onRequest);
+                handlers.push(mod.handle);
             }
         }
     }
@@ -201,7 +201,7 @@ async function executeChain(middlewares, handler, context) {
 // ==================== EdgeOne 入口 ====================
 
 /**
- * EdgeOne Pages Functions / Edge Functions 的 onRequest 入口。
+ * EdgeOne Pages Functions / Edge Functions 的 handle 入口。
  * 由 edge-core/ 下的具体路由文件转发进来。
  */
 export async function handleRequest(eventContext) {
@@ -227,15 +227,15 @@ async function dispatch(request, env, ctx) {
     const mod = route.module;
 
     const method = request.method.toUpperCase();
-    const methodHandlerName = 'onRequest' + method.charAt(0) + method.slice(1).toLowerCase();
+    const methodHandlerName = 'handle' + method.charAt(0) + method.slice(1).toLowerCase();
 
     let handler = null;
     if (typeof mod[methodHandlerName] === 'function') {
         handler = mod[methodHandlerName];
-    } else if (mod.onRequest) {
-        handler = typeof mod.onRequest === 'function'
-            ? mod.onRequest
-            : mod.onRequest[mod.onRequest.length - 1];
+    } else if (mod.handle) {
+        handler = typeof mod.handle === 'function'
+            ? mod.handle
+            : mod.handle[mod.handle.length - 1];
     }
 
     if (!handler) {
@@ -244,9 +244,9 @@ async function dispatch(request, env, ctx) {
 
     const middlewares = collectMiddlewares(route.middlewares);
 
-    if (Array.isArray(mod.onRequest) && mod.onRequest.length > 1 &&
-        handler === mod.onRequest[mod.onRequest.length - 1]) {
-        middlewares.push(...mod.onRequest.slice(0, -1));
+    if (Array.isArray(mod.handle) && mod.handle.length > 1 &&
+        handler === mod.handle[mod.handle.length - 1]) {
+        middlewares.push(...mod.handle.slice(0, -1));
     }
 
     const context = {

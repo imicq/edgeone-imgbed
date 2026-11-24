@@ -12,7 +12,7 @@ import { moderateContent, endUpload, getUploadIp, getIPAddress, sanitizeUploadFo
 import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
 import { resolveUploadExpiry } from '../../utils/fileExpiryService.js';
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     const { request, env, waitUntil } = context;
     const url = new URL(request.url);
 

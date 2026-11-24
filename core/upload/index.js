@@ -18,7 +18,7 @@ import { getDatabase } from '../utils/databaseAdapter.js';
 import { resolveUploadExpiry } from '../utils/fileExpiryService.js';
 
 
-export async function onRequest(context) {  // Contents of context object
+export async function handle(context) {  // Contents of context object
     const { request, env, params, waitUntil, next, data } = context;
 
     // 解析请求的URL，存入 context

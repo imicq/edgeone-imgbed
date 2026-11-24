@@ -1,7 +1,7 @@
 import { applyTagItems } from '../../../utils/tagService.js';
 import { APIError, json, readJSON, errorResponse } from '../../../utils/apiResponse.js';
 
-export async function onRequestPost(context) {
+export async function handlePost(context) {
     try {
         const { items } = await readJSON(context.request);
         if (!Array.isArray(items) || !items.length || items.length > 50 || items.some(item => typeof item?.sourceIdentity !== 'string' || !/^[a-f0-9]{64}$/.test(item.sourceIdentity))) {
