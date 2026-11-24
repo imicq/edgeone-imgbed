@@ -292,7 +292,7 @@ async function dispatch(request, env, ctx) {
         ? () => mod.isCachedResponseServable(context)
         : null;
 
-    const response = await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context), isCachedServable);
+    const response = await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context), isCachedServable, env);
     return withProjectHeaders(response);
 }
 
