@@ -1,0 +1,6 @@
+{
+  "name": "edgeone-imgbed",
+  "installCommand": "npm install --workspaces=false --omit=dev --no-audit --no-fund",
+  "outputDirectory": "./frontend-dist",
+  "nodeVersion": "22.11.0"
+}
