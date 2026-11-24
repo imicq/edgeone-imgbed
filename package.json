@@ -7,7 +7,8 @@
     "deploy/profiles/*"
   ],
   "scripts": {
-    "build": "node scripts/patch-frontend-edgeone.mjs",`n    "build:function": "node scripts/build-function.mjs",
+    "build": "node scripts/patch-frontend-edgeone.mjs",
+    "build:function": "node scripts/build-function.mjs",
     "ci-test": "concurrently --kill-others \"npm start\" \"wait-on http://localhost:8080 && mocha\"",
     "ci-test:docker": "concurrently --kill-others \"npm run start:docker\" \"wait-on http://localhost:8080 && mocha\"",
     "test": "mocha",
