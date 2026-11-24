@@ -394,6 +394,9 @@ export async function endUpload(context, fileId, metadata) {
 // 从 request 中解析 ip 地址
 export function getUploadIp(request) {
     const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-client-ip") || request.headers.get("x-host") || request.headers.get("x-originating-ip") || request.headers.get("x-cluster-client-ip") || request.headers.get("forwarded-for") || request.headers.get("forwarded") || request.headers.get("via") || request.headers.get("requester") || request.headers.get("true-client-ip") || request.headers.get("client-ip") || request.headers.get("x-remote-ip") || request.headers.get("x-originating-ip") || request.headers.get("fastly-client-ip") || request.headers.get("akamai-origin-hop") || request.headers.get("x-remote-addr") || request.headers.get("x-remote-host") || request.headers.get("x-client-ips")
+        // EdgeOne 边缘运行时不会补 cf-connecting-ip，客户端 IP 在 request.eo.clientIp 上
+        || request?.eo?.clientIp
+        || request?.cf?.clientIp
 
     if (!ip) {
         return null;
