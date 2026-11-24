@@ -54,6 +54,9 @@ async function refererAllowed(request, env, url) {
 function buildHitResponse(cached) {
     const headers = new Headers(cached.headers);
     headers.delete(INTERNAL_HEADER);
+    // 节点缓存里为了控制 TTL 写的是 max-age=600，但对浏览器要还原成上游的 30 天，
+    // 否则命中缓存的响应会把浏览器的缓存时间一起缩短。
+    headers.set('Cache-Control', 'public, max-age=2592000');
     headers.set('x-imgbed-cache', 'HIT');
     return withProjectHeaders(new Response(cached.body, {
         status: cached.status,
