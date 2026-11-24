@@ -8,7 +8,7 @@
  *   - 没有 ASSETS 绑定，未命中的路径交给 Makers 静态资源处理
  */
 
-import { maybeServeFromCache } from '../worker/workerCache.js';
+import { maybeServeFromCache } from './cache.js';
 import { withProjectHeaders } from '../../core/utils/projectHeaders.js';
 import { toPagesContext } from './env.js';
 
