@@ -6,40 +6,39 @@
 // 表现为"填了放行域名反而全部被拦"。这里改成显式的主机名比较：
 //   - `hxy.cc` 同时匹配 hxy.cc 与其所有子域
 //   - `*.hxy.cc` 只匹配子域（等价写法，两种都支持）
+//
+// 另外：只要配置了「放行域名」，就要求请求必须带 Referer（即禁止浏览器直接粘贴
+// 图片地址 / 空 Referer 的第三方抓取），未配置时保持上游的宽松行为。
 export function isDomainAllowed(context) {
     const { Referer, securityConfig, url } = context;
 
     const allowedDomains = securityConfig?.access?.allowedDomains;
+    const domains = (allowedDomains || '')
+        .split(',')
+        .map((d) => d.trim().toLowerCase().replace(/^\./, ''))
+        .filter(Boolean);
 
-    if (Referer) {
-        try {
-            const refererHost = new URL(Referer).hostname.toLowerCase();
-            if (allowedDomains && allowedDomains.trim() !== '') {
-                const domains = allowedDomains
-                    .split(',')
-                    .map((d) => d.trim().toLowerCase().replace(/^\./, ''))
-                    .filter(Boolean);
-                // 自身域名始终允许
-                domains.push(String(url.hostname).toLowerCase());
+    // 没配置放行域名 → 不做限制（与上游一致）
+    if (domains.length === 0) return true;
 
-                const isAllowed = domains.some((domain) => {
-                    const wildcard = domain.startsWith('*.');
-                    const base = wildcard ? domain.slice(2) : domain;
-                    if (!base) return false;
-                    if (refererHost === base) return true;
-                    return refererHost.endsWith('.' + base);
-                });
+    // 配置了放行域名但请求没有 Referer → 拒绝（防盗链 / 禁止直链访问）
+    if (!Referer) return false;
 
-                if (!isAllowed) {
-                    return false;
-                }
-            }
-        } catch (e) {
-            return false;
-        }
+    try {
+        const refererHost = new URL(Referer).hostname.toLowerCase();
+        // 自身域名始终允许
+        domains.push(String(url.hostname).toLowerCase());
+
+        return domains.some((domain) => {
+            const wildcard = domain.startsWith('*.');
+            const base = wildcard ? domain.slice(2) : domain;
+            if (!base) return false;
+            if (refererHost === base) return true;
+            return refererHost.endsWith('.' + base);
+        });
+    } catch (e) {
+        return false;
     }
-
-    return true;
 }
 
 // 判断请求是否来自公开图库页面 (/browse 或 /browse/*)
