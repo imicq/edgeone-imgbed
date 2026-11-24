@@ -9,6 +9,7 @@
  */
 
 import { maybeServeFromCache } from './cache.js';
+import { SPA_INDEX_HTML } from './spa-index.js';
 import { withProjectHeaders } from '../../core/utils/projectHeaders.js';
 import { toPagesContext } from './env.js';
 
@@ -156,6 +157,18 @@ function matchRoute(pathname) {
 }
 
 
+// 不允许走 SPA 回退的路径前缀（这些是 API / 上传 / 文件 / WebDAV 等动态路径）
+const SPA_EXCLUDED_PREFIXES = ['/api/', '/api', '/upload', '/file', '/random', '/dav', '/s3'];
+
+function looksLikeAsset(pathname) {
+    if (SPA_EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p))) {
+        return true;
+    }
+    const last = pathname.split('/').pop() || '';
+    return last.includes('.');
+}
+
+
 // ==================== 中间件链执行 ====================
 
 function collectMiddlewares(middlewareModules) {
@@ -218,8 +231,20 @@ async function dispatch(request, env, ctx) {
 
     const matched = matchRoute(pathname);
 
-    // 没有命中业务路由：交给 Makers 的静态资源处理
+    // 没有命中业务路由
     if (!matched) {
+        // SPA 回退：前端是 history 模式路由（/dashboard、/adminLogin、/browse/xx 等），
+        // 刷新这类无扩展名路径时静态层没有对应文件，返回 index.html 让 Vue Router 接管。
+        const method = request.method.toUpperCase();
+        if ((method === 'GET' || method === 'HEAD') && !looksLikeAsset(pathname)) {
+            return withProjectHeaders(new Response(method === 'HEAD' ? null : SPA_INDEX_HTML, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                },
+            }));
+        }
         return withProjectHeaders(new Response('Not Found', { status: 404 }));
     }
 
