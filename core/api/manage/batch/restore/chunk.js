@@ -8,11 +8,11 @@ import { getDatabase } from '../../../../utils/databaseAdapter.js';
 import { cleanPersistedMetadata } from '../../../../utils/metadata/metadataSecurity.js';
 import { saveIndex } from '../index/finalize.js';
 
-// 导入会话：记录本次导入的起点（导入前索引里有哪些 id）与已导入的记录。
-// 设置分块永远排在文件分块之后，所以收到 settings 分块时即可判定「文件导入已结束」，
-// 此时把「导入前存在、本次备份里没有」的残留记录从 KV 中删掉，实现整库覆盖。
-const IMPORT_SESSION_KEY = 'import@files@session';
-const IMPORT_SESSION_TTL_MS = 60 * 60 * 1000; // 1 小时没动静就当作新的一次导入
+// 导入过程中每个文件分块的原始数据暂存键前缀。
+// 说明：EdgeOne KV 是最终一致的，读到刚写入的值可能还是旧值，
+// 所以导入期间绝对不能「读-改-写」累积状态，只能追加写入独立键，
+// 等导入结束（收到 settings 分块）时一次性汇总、重建索引。
+const IMPORT_CHUNK_PREFIX = 'import@c@';
 
 /** 读取当前索引里的全部记录（可能失败，失败返回空数组） */
 async function readIndexRecords(db) {
@@ -33,68 +33,64 @@ async function readIndexRecords(db) {
   return records;
 }
 
-/**
- * 导入文件：以「本次导入的记录」为准重建索引（整库覆盖语义），
- * 导入完成即可在管理页看到，不需要再点「重建索引」。
- */
-async function syncIndexForImport(db, env, records) {
-  try {
-    const now = Date.now();
-    let session = null;
-    const raw = await db.get(IMPORT_SESSION_KEY);
-    if (raw) {
-      try {
-        session = JSON.parse(raw);
-      } catch (e) {
-        session = null;
-      }
-    }
-    if (!session || !session.startedAt || now - session.startedAt > IMPORT_SESSION_TTL_MS) {
-      const existing = await readIndexRecords(db);
-      session = { startedAt: now, prevIds: existing.map((r) => r.id), records: [] };
-    }
-
-    const map = new Map(session.records.map((r) => [r.id, r]));
-    for (const r of records) {
-      map.set(r.id, { id: r.id, metadata: r.metadata });
-    }
-    session.records = Array.from(map.values());
-    session.updatedAt = now;
-
-    await db.put(IMPORT_SESSION_KEY, JSON.stringify(session));
-    const result = await saveIndex(db, session.records, env);
-    return { totalCount: session.records.length, ok: !!result?.success };
-  } catch (error) {
-    console.warn('[import] sync index failed:', error?.message || error);
-    return { totalCount: 0, ok: false };
-  }
+/** 把本批导入记录暂存起来（追加写，每次一个独立键，不读不写旧值） */
+async function stageImportRecords(db, records) {
+  const key = `${IMPORT_CHUNK_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await db.put(key, JSON.stringify(records));
+  return key;
 }
 
 /**
- * 导入收尾（在收到设置分块时触发）：
- * 删掉「导入前有、本次备份里没有」的残留记录，并清理导入会话。
+ * 导入收尾（收到设置分块时触发）：
+ * 汇总所有暂存分块 → 用「备份里的记录」重建索引 → 删掉备份里没有的残留记录。
  */
 async function finishImport(db, env) {
   try {
-    const raw = await db.get(IMPORT_SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    const importedIds = new Set((session.records || []).map((r) => r.id));
-    const staleIds = (session.prevIds || []).filter((id) => !importedIds.has(id));
+    const index = await db.list({ prefix: IMPORT_CHUNK_PREFIX, limit: 5000 });
+    const stageKeys = (index?.keys || []).map((k) => k.name).filter((n) => n.startsWith(IMPORT_CHUNK_PREFIX));
+    if (stageKeys.length === 0) return null;
 
-    let deletedCount = 0;
+    const importedMap = new Map();
+    for (const key of stageKeys) {
+      const raw = await db.get(key);
+      if (!raw) continue;
+      try {
+        for (const r of JSON.parse(raw)) {
+          if (r && typeof r.id === 'string') importedMap.set(r.id, { id: r.id, metadata: r.metadata || {} });
+        }
+      } catch (e) {
+        console.warn(`[import] stage ${key} parse failed`);
+      }
+    }
+
+    const imported = Array.from(importedMap.values());
+    const importedIds = new Set(imported.map((r) => r.id));
+
+    // 导入期间索引没动过，这里读到的就是「导入前」的记录
+    const prev = await readIndexRecords(db);
+    const staleIds = prev.map((r) => r.id).filter((id) => !importedIds.has(id));
+
+    let deletedStaleCount = 0;
     for (const id of staleIds) {
       try {
         await db.delete(id);
-        deletedCount += 1;
+        deletedStaleCount += 1;
       } catch (e) {
         console.warn(`[import] delete stale ${id} failed: ${e?.message || e}`);
       }
     }
 
-    await saveIndex(db, session.records || [], env);
-    await db.delete(IMPORT_SESSION_KEY);
-    return { importedCount: importedIds.size, deletedStaleCount: deletedCount, staleIds: staleIds.slice(0, 20) };
+    await saveIndex(db, imported, env);
+
+    for (const key of stageKeys) {
+      try {
+        await db.delete(key);
+      } catch (e) {
+        // 忽略
+      }
+    }
+
+    return { importedCount: importedIds.size, deletedStaleCount, staleIds: staleIds.slice(0, 20) };
   } catch (error) {
     console.warn('[import] finish failed:', error?.message || error);
     return null;
@@ -196,21 +192,26 @@ export async function handlePost(context) {
         }
       }
 
-      // 导入文件后立刻同步索引，用户不用再手动点「重建索引」
+      // 先把本批记录暂存（追加写独立键）；索引等导入结束（settings 分块）时统一重建
       const recordsForIndex = Object.entries(data)
         .filter(([, fileData]) => fileData && fileData.metadata)
         .map(([key, fileData]) => ({
           id: key,
           metadata: cleanPersistedMetadata(fileData.metadata),
         }));
-      const indexSync = await syncIndexForImport(db, env, recordsForIndex);
+      let staged = true;
+      try {
+        await stageImportRecords(db, recordsForIndex);
+      } catch (e) {
+        staged = false;
+        console.warn('[import] stage failed:', e?.message || e);
+      }
       return jsonResponse({
         success: true,
         restoredCount,
         failedCount,
         errors: errors.length > 0 ? errors.slice(0, 10) : undefined, // 只返回前10个错误
-        indexTotalCount: indexSync.totalCount,
-        indexSynced: indexSync.ok,
+        staged,
       });
     } else if (type === 'settings') {
       // 恢复系统设置 - 并行写入
