@@ -1,21 +1,33 @@
 /* ======== 文件读取工具函数 ======== */
 
 // 判断请求域名是否在允许的域名列表中
+// 说明：上游用 `(^|\.)xxx$` 正则做匹配，但只转义了第一个点，且不支持 `*.` 通配，
+// 只要列表里出现 `*.hxy.cc` 这种写法，正则就会抛错（catch 后直接判定为不允许），
+// 表现为"填了放行域名反而全部被拦"。这里改成显式的主机名比较：
+//   - `hxy.cc` 同时匹配 hxy.cc 与其所有子域
+//   - `*.hxy.cc` 只匹配子域（等价写法，两种都支持）
 export function isDomainAllowed(context) {
     const { Referer, securityConfig, url } = context;
 
-    const allowedDomains = securityConfig.access.allowedDomains;
+    const allowedDomains = securityConfig?.access?.allowedDomains;
 
     if (Referer) {
         try {
-            const refererUrl = new URL(Referer);
+            const refererHost = new URL(Referer).hostname.toLowerCase();
             if (allowedDomains && allowedDomains.trim() !== '') {
-                const domains = allowedDomains.split(',');
-                domains.push(url.hostname);// 把自身域名加入白名单
+                const domains = allowedDomains
+                    .split(',')
+                    .map((d) => d.trim().toLowerCase().replace(/^\./, ''))
+                    .filter(Boolean);
+                // 自身域名始终允许
+                domains.push(String(url.hostname).toLowerCase());
 
-                let isAllowed = domains.some(domain => {
-                    let domainPattern = new RegExp(`(^|\\.)${domain.replace('.', '\\.')}$`); // Escape dot in domain
-                    return domainPattern.test(refererUrl.hostname);
+                const isAllowed = domains.some((domain) => {
+                    const wildcard = domain.startsWith('*.');
+                    const base = wildcard ? domain.slice(2) : domain;
+                    if (!base) return false;
+                    if (refererHost === base) return true;
+                    return refererHost.endsWith('.' + base);
                 });
 
                 if (!isAllowed) {
