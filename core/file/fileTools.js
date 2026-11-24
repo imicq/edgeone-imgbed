@@ -70,7 +70,9 @@ export function setCommonHeaders(headers, encodedFileName, fileType, cacheContro
     headers.set('Content-Disposition', `inline; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`);
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', 'bytes');
-    headers.set('Vary', 'Range');
+    // EdgeOne 边缘节点只在 Vary 为 Accept-Encoding 之类可识别值时才缓存响应，
+    // 上游这里的 `Vary: Range` 会让 /file/* 永远无法命中缓存（每个请求都回源），
+    // 因此这里不下发 Vary；Range 语义仍由 Accept-Ranges/Content-Range 表达。
 
     if (fileType) {
         headers.set('Content-Type', fileType);
