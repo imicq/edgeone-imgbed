@@ -222,13 +222,13 @@ export class EdgeKVNamespace {
     const prefix = options.prefix || '';
     const limit = Math.max(1, Math.min(Number(options.limit) || 1000, 5000));
     const encodedPrefix = encodeKey(prefix);
-    const keys = [];
+    const names = [];
     let cursor = options.cursor || undefined;
     let complete = true;
     let lastCursor;
 
-    while (keys.length < limit) {
-      const pageSize = Math.min(256, limit - keys.length);
+    while (names.length < limit) {
+      const pageSize = Math.min(256, limit - names.length);
       const page = await this.raw.list({
         prefix: encodedPrefix,
         limit: pageSize,
@@ -245,7 +245,7 @@ export class EdgeKVNamespace {
         ) {
           continue;
         }
-        keys.push({ name: decodeKey(name) });
+        names.push(name);
       }
       complete = page?.complete !== false;
       lastCursor = page?.cursor || undefined;
@@ -253,6 +253,23 @@ export class EdgeKVNamespace {
       cursor = lastCursor;
       if (!cursor) break;
     }
+
+    // Cloudflare KV 的 list 会带回每个 key 的 metadata（业务层「重建索引」「导出数据」依赖它），
+    // EdgeOne KV 的 list 只有 key，所以这里按 _m_ 前缀并发补读一次 metadata。
+    const keys = await Promise.all(
+      names.map(async (name) => {
+        const metaText = await safeGet(this.raw, META_PREFIX + name, 'text');
+        let metadata = null;
+        if (metaText) {
+          try {
+            metadata = JSON.parse(metaText);
+          } catch {
+            metadata = null;
+          }
+        }
+        return { name: decodeKey(name), metadata };
+      })
+    );
 
     return {
       keys,
