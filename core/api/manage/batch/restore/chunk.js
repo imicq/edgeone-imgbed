@@ -26,7 +26,22 @@ async function syncIndexWithPending(db, env, records) {
           if (r && typeof r.id === 'string') map.set(r.id, r);
         }
       } catch (e) {
-        console.warn('[import] pending index corrupt, rebuilding from this chunk only');
+        console.warn('[import] pending index corrupt, rebuilding from current index + this chunk');
+      }
+    } else {
+      // 首次导入：以当前已有索引为基底，避免「只导入了半批」时把原有记录挤掉
+      try {
+        const metaStr = await db.get('manage@index@meta');
+        const chunkCount = metaStr ? Number(JSON.parse(metaStr).chunkCount) || 0 : 0;
+        for (let i = 0; i < chunkCount; i += 1) {
+          const chunkStr = await db.get(`manage@index_${i}`);
+          if (!chunkStr) continue;
+          for (const r of JSON.parse(chunkStr)) {
+            if (r && typeof r.id === 'string') map.set(r.id, r);
+          }
+        }
+      } catch (e) {
+        console.warn('[import] read existing index failed:', e?.message || e);
       }
     }
     for (const r of records) {
