@@ -25,6 +25,7 @@
     '.' + BADGE_CLASS + '.is-latest .ub-dot{background:#35c07f;}',
     '.' + BADGE_CLASS + '.is-error .ub-dot{background:#e05b5b;}',
     '.' + BADGE_CLASS + '.is-incomplete .ub-dot{background:#d0a03a;}',
+    '.' + BADGE_CLASS + '.is-commits .ub-text{font-weight:400;opacity:.78;}',
     '.' + BADGE_CLASS + ' .ub-text{font-weight:600;}',
     '.' + BADGE_CLASS + ' .ub-sub{opacity:.62;font-weight:400;}',
     '.' + BADGE_CLASS + ' .ub-refresh{opacity:.55;border:0;background:none;padding:0 0 0 2px;',
@@ -76,28 +77,25 @@
       sub.textContent = '（' + reason + '）';
       badge.href = upstream.repoUrl ? upstream.repoUrl + '/commits/main' : '#';
     } else if (upstream.updateAvailable) {
+      // 只有上游发了版本号更高的 release 才提示"该更新"
       badge.classList.add('is-new');
       var releaseTag = upstream.release && upstream.release.tag ? upstream.release.tag : '';
-      var headShort = upstream.head && upstream.head.shortSha ? upstream.head.shortSha : '';
-      var releaseNewer = !!upstream.releaseIsNewer;
-      var bits = [];
-      if (releaseNewer) {
-        // 真正的发版更新：版本号比我们高
-        text.textContent = '上游有新版本 ' + releaseTag;
-        if (upstream.commitsBehind > 0) bits.push('落后 ' + upstream.commitsBehind + ' 个提交');
-      } else {
-        // 版本号没动，但上游 main 已经往前跑了
-        text.textContent = upstream.commitsBehind > 0
-          ? '上游有 ' + upstream.commitsBehind + ' 个新提交'
-          : '上游有新提交';
-        if (releaseTag) bits.push('版本同为 ' + releaseTag + (headShort ? ' · main @ ' + headShort : ''));
-      }
       var need = upstream.files && upstream.files.needAdaptCount;
+      var bits = [];
+      text.textContent = '上游有新版本 ' + releaseTag;
+      if (upstream.commitsBehind > 0) bits.push('落后 ' + upstream.commitsBehind + ' 个提交');
       if (need > 0) bits.push(need + ' 个文件需适配');
       sub.textContent = bits.length ? '（' + bits.join(' · ') + '）' : '';
       badge.href = (upstream.compare && upstream.compare.url) ||
         (upstream.release && upstream.release.url) ||
         (upstream.repoUrl ? upstream.repoUrl + '/commits/main' : '#');
+    } else if (upstream.status === 'commits' || (upstream.commitsBehind > 0 && !upstream.compareUnknown)) {
+      // 同版本、main 有新提交：只做情报提示，不催同步
+      badge.classList.add('is-commits');
+      var headShort = upstream.head && upstream.head.shortSha ? upstream.head.shortSha : '';
+      text.textContent = '上游 main 有 ' + upstream.commitsBehind + ' 个新提交';
+      sub.textContent = '（未发版 · 等同版本号更新后再同步' + (headShort ? ' · main @ ' + headShort : '') + '）';
+      badge.href = (upstream.compare && upstream.compare.url) || (upstream.repoUrl ? upstream.repoUrl + '/commits/main' : '#');
     } else {
       badge.classList.add('is-latest');
       text.textContent = '上游已是最新 ' + (upstream.release && upstream.release.tag ? upstream.release.tag : '');

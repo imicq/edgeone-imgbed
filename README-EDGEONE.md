@@ -105,7 +105,8 @@ curl -b jar -X POST "https://<项目域名>/api/auth/adminLogin" \
 
 后台首页「系统版本」卡片下方会多一行状态，例如：
 
-- `上游有新版本 v2.8.0（落后 12 个提交 · 5 个文件待适配）`
+- `上游有新版本 v2.8.0（落后 12 个提交 · 5 个文件需适配）`
+- `上游 main 有 41 个新提交（未发版 · 等同版本号更新后再同步 · main @ a4ab7d6）`
 - `上游已是最新 v2.7.8（基线 v2.7.8）`
 - `上游版本对比未取到（GitHub API 限流…）`
 
@@ -117,7 +118,9 @@ curl -b jar -X POST "https://<项目域名>/api/auth/adminLogin" \
 - 上游基线 = 同文件里的 `UPSTREAM_BASELINE`（版本 + 提交 sha）
 - 实际比对：GitHub `releases/latest` 的 tag、`commits/main` 的 head、以及
   `compare/{基线sha}...{head}` 的文件清单
-- 结果按 6 小时缓存在 KV（`upstream@status`），避免把 GitHub 匿名额度（60 次/小时）打光
+- **只有上游发了版本号更高的 release 才算「该更新」**（`status: update`）；
+  main 上的零散提交只作情报提示（`status: commits`），不催同步 —— 上游经常不发版就一直推提交，跟着它跑没有终点
+- 结果按 6 小时缓存在 KV（`upstream@status:v2`），避免把 GitHub 匿名额度（60 次/小时）打光
 - 想提高额度：在 EdgeOne 项目环境变量里加 `GITHUB_TOKEN`，接口会自动带上
 
 ### 发现更新之后怎么搬到本项目

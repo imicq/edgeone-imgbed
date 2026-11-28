@@ -28,7 +28,7 @@ const CORS_HEADERS = {
     'Access-Control-Allow-Max-Age': '86400',
 };
 
-const CACHE_KEY = 'upstream@status';
+const CACHE_KEY = 'upstream@status:v2';
 const CACHE_TTL_SECONDS = 6 * 60 * 60;
 const GITHUB_TIMEOUT_MS = 9000;
 const MAX_FILE_SAMPLES = 40;
@@ -137,7 +137,10 @@ async function fetchUpstreamStatus(env) {
         }
     }
 
-    const isNewer = releaseIsNewer || commitsBehind > 0;
+    // 是否"该同步"只看上游有没有发新版本（release 版本号高于我们）。
+    // main 上的零散提交不算数：上游常常不发版就一直推提交，跟着它跑没有终点。
+    const isNewer = releaseIsNewer;
+    const commitsPending = commitsBehind > 0;
 
     return {
         repo: UPSTREAM_REPO,
@@ -164,9 +167,11 @@ async function fetchUpstreamStatus(env) {
         compareUnknown,
         files,
         commitsBehind,
+        commitsPending,
         updateAvailable: isNewer,
-        // update=确实有更新；latest=已是最新；incomplete=版本没变但差异查不到（限流/网络），需要重试
-        status: isNewer ? 'update' : (compareUnknown ? 'incomplete' : 'latest'),
+        // update=上游发了新版本，该同步；commits=同版本但 main 有新提交，只做提示、不同步；
+        // latest=已是最新；incomplete=版本没变但差异查不到（限流/网络），需要重试
+        status: isNewer ? 'update' : (compareUnknown ? 'incomplete' : (commitsPending ? 'commits' : 'latest')),
         releaseIsNewer,
         checkedAt: new Date().toISOString(),
     };
