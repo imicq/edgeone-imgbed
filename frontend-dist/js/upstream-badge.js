@@ -107,6 +107,11 @@
       badge.appendChild(stamp);
     }
 
+    // 卡片本身点击会打开 releases 页，这里拦掉冒泡，避免点徽标时顺手把后台跳走
+    badge.addEventListener('click', function (event) {
+      event.stopPropagation();
+    });
+
     var refresh = document.createElement('button');
     refresh.type = 'button';
     refresh.className = 'ub-refresh';
