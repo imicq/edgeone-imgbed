@@ -79,12 +79,21 @@
       badge.classList.add('is-new');
       var releaseTag = upstream.release && upstream.release.tag ? upstream.release.tag : '';
       var headShort = upstream.head && upstream.head.shortSha ? upstream.head.shortSha : '';
-      text.textContent = '上游有新版本 ' + (releaseTag || headShort);
+      var releaseNewer = !!upstream.releaseIsNewer;
       var bits = [];
-      if (upstream.commitsBehind > 0) bits.push('落后 ' + upstream.commitsBehind + ' 个提交');
+      if (releaseNewer) {
+        // 真正的发版更新：版本号比我们高
+        text.textContent = '上游有新版本 ' + releaseTag;
+        if (upstream.commitsBehind > 0) bits.push('落后 ' + upstream.commitsBehind + ' 个提交');
+      } else {
+        // 版本号没动，但上游 main 已经往前跑了
+        text.textContent = upstream.commitsBehind > 0
+          ? '上游有 ' + upstream.commitsBehind + ' 个新提交'
+          : '上游有新提交';
+        if (releaseTag) bits.push('版本同为 ' + releaseTag + (headShort ? ' · main @ ' + headShort : ''));
+      }
       var need = upstream.files && upstream.files.needAdaptCount;
-      if (need > 0) bits.push(need + ' 个文件待适配');
-      if (!releaseTag && upstream.head) bits.push('main @ ' + headShort);
+      if (need > 0) bits.push(need + ' 个文件需适配');
       sub.textContent = bits.length ? '（' + bits.join(' · ') + '）' : '';
       badge.href = (upstream.compare && upstream.compare.url) ||
         (upstream.release && upstream.release.url) ||
