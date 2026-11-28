@@ -18,6 +18,10 @@ const BUNDLE = join(ROOT, 'frontend-dist', 'js', '375.43b3c74e.js');
 // 900000 字节 ≈ 0.86MB，给 multipart 字段与头部留出余量
 const CHUNK_BYTES = '900000';
 
+const PRELINK_OWNER_PATTERN = 'ownerName(){return this.configuredOwnerName||"Sanyue"},';
+const PRELINK_TITLE_METHOD = 'titleHref(){return this.userConfig?.logoLink||""},';
+const DUP_TITLE = PRELINK_TITLE_METHOD + PRELINK_TITLE_METHOD;
+
 const REPLACEMENTS = [
     // 分片大小：discord 9MB / 其它 16MB -> 统一 900KB
     ['"discord"===o?9437184:16777216', `"discord"===o?${CHUNK_BYTES}:${CHUNK_BYTES}`],
@@ -28,10 +32,8 @@ const REPLACEMENTS = [
     ['this.useConfigLink&&this.userConfig?.logoLink', 'this.userConfig?.logoLink'],
     // 首页中间「站名/作者名」链接：上游写死成 GitHub 仓库地址，这里改成读取后台
     // 配置的「Logo跳转链接」(logoLink)，未配置时回落到站点根路径。
-    [
-        'ownerName(){return this.configuredOwnerName||"Sanyue"},',
-        'ownerName(){return this.configuredOwnerName||"Sanyue"},titleHref(){return this.userConfig?.logoLink||""},',
-    ],
+    // 幂等：只在还没有 titleHref 时插一次
+    [PRELINK_OWNER_PATTERN, PRELINK_OWNER_PATTERN + PRELINK_TITLE_METHOD],
     [
         '(0,l.Lk)("a",Oo,(0,n.v_)(d.ownerName),1)',
         '(0,l.Lk)("a",{class:"main-title",href:d.titleHref||"/",target:"_blank"},(0,n.v_)(d.ownerName),1)',
@@ -41,7 +43,16 @@ const REPLACEMENTS = [
 let source = readFileSync(BUNDLE, 'utf8');
 let changed = 0;
 
+// 历史上这个补丁重复插入过 titleHref，先收敛成一次，保证幂等
+if (source.includes(DUP_TITLE)) {
+    source = source.split(DUP_TITLE).join(PRELINK_TITLE_METHOD);
+    changed += 1;
+}
+
 for (const [from, to] of REPLACEMENTS) {
+    if (from === PRELINK_OWNER_PATTERN && source.includes(PRELINK_TITLE_METHOD)) {
+        continue;
+    }
     if (!source.includes(from)) {
         if (source.includes(to)) {
             console.log(`already patched: ${from.slice(0, 28)}…`);

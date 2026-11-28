@@ -19,3 +19,5 @@ node_modules
 .edgeone/*
 .tef_dist/*
   
+# 上游同步临时产物
+.upstream-sync/

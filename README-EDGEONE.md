@@ -100,3 +100,46 @@ curl -b jar -X POST "https://<项目域名>/api/auth/adminLogin" \
 - 预置域名 `*.edgeone.cool` 带时效 token，长期对外使用需绑定自定义域名（大陆加速需 ICP 备案）。
 - `/api/manage/dedup/scan` 依赖 R2 绑定读取对象内容，EdgeOne 版返回 `supported` 但不做实际去重。
 - 缓存清理（CF purge / caches.default）在 EdgeOne 下为空实现。
+
+## 上游更新检测与同步
+
+后台首页「系统版本」卡片下方会多一行状态，例如：
+
+- `上游有新版本 v2.8.0（落后 12 个提交 · 5 个文件待适配）`
+- `上游已是最新 v2.7.8（基线 v2.7.8）`
+- `上游版本对比未取到（GitHub API 限流…）`
+
+点这行进 GitHub 对比页，点后面的「重新检测」强制重查。
+
+### 它是怎么判断的
+
+- 站点当前版本 = `core/utils/upstreamBaseline.js` 里的 `SELF_VERSION`
+- 上游基线 = 同文件里的 `UPSTREAM_BASELINE`（版本 + 提交 sha）
+- 实际比对：GitHub `releases/latest` 的 tag、`commits/main` 的 head、以及
+  `compare/{基线sha}...{head}` 的文件清单
+- 结果按 6 小时缓存在 KV（`upstream@status`），避免把 GitHub 匿名额度（60 次/小时）打光
+- 想提高额度：在 EdgeOne 项目环境变量里加 `GITHUB_TOKEN`，接口会自动带上
+
+### 发现更新之后怎么搬到本项目
+
+```bash
+node scripts/upstream-sync.mjs check        # 看落后多少提交、哪些文件变了
+node scripts/upstream-sync.mjs fetch        # 抓文件 + 预转换 + 生成报告
+```
+
+`fetch` 会在 `.upstream-sync/<sha>/` 下产出：
+
+- `upstream/`：上游原始文件
+- `converted/`：按本项目规则预转换过的版本（`functions/` → `core/`，`onRequest*` → `handle*`）
+- `REPORT.md`：每个文件的落点、状态、以及「可直接覆盖 / 人工合并」
+
+判定「要不要人工合并」的方式很直接：把**基线提交（v2.7.8）里的上游原版**按规则转一遍，
+和仓库里现有文件比对——不一致就说明那个文件是我们改过的（比如 `core/file/fileTools.js`
+的防盗链重写、`core/api/manage/list.js` 加的到期清理调用），只能手合并，脚本不会覆盖。
+
+改完收尾：
+
+1. 前端有变化时重跑 `node scripts/patch-frontend-edgeone.mjs`（会顺带重建 `spa-index.js`）
+2. 新路由/删路由同步 `deploy/edgeone/index.js` 的 import 与 `routes`
+3. 更新 `core/utils/upstreamBaseline.js` 的 version / sha / date
+4. 提交推送，等 Makers 自动构建后验证

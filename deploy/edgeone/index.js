@@ -56,6 +56,7 @@ import * as apiManageApiTokens from '../../core/api/manage/apiTokens.js';
 import * as apiManageExpiry from '../../core/api/manage/expiry.js';
 import * as apiManageList from '../../core/api/manage/list.js';
 import * as apiManageQuota from '../../core/api/manage/quota.js';
+import * as apiManageUpstream from '../../core/api/manage/upstream.js';
 import * as apiPublicList from '../../core/api/public/list.js';
 import * as uploadHuggingfaceCommitUpload from '../../core/upload/huggingface/commitUpload.js';
 import * as uploadHuggingfaceCompleteMultipart from '../../core/upload/huggingface/completeMultipart.js';
@@ -115,6 +116,7 @@ const routes = [
     { path: '/api/manage/expiry', module: apiManageExpiry, middlewares: [mw_root, mw_api, mw_api_manage] },
     { path: '/api/manage/list', module: apiManageList, middlewares: [mw_root, mw_api, mw_api_manage] },
     { path: '/api/manage/quota', module: apiManageQuota, middlewares: [mw_root, mw_api, mw_api_manage] },
+    { path: '/api/manage/upstream', module: apiManageUpstream, middlewares: [mw_root, mw_api, mw_api_manage] },
     { path: '/api/public/list', module: apiPublicList, middlewares: [mw_root, mw_api] },
     { path: '/upload/huggingface/commitUpload', module: uploadHuggingfaceCommitUpload, middlewares: [mw_root, mw_upload] },
     { path: '/upload/huggingface/completeMultipart', module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_root, mw_upload] },
